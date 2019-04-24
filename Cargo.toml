@@ -1,0 +1,6 @@
+[package]
+name = "virgltrace"
+version = "0.1.0"
+authors = ["Chia-I Wu <olvaffe@gmail.com>"]
+
+[dependencies]
