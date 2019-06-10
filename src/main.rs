@@ -18,7 +18,7 @@ struct Category {
     events: &'static [Event],
 }
 
-static CATEGORIES: [Category; 7] = [
+static CATEGORIES: [Category; 8] = [
     Category {
         name: "sched",
         description: "",
@@ -120,12 +120,23 @@ static CATEGORIES: [Category; 7] = [
         ],
     },
     Category {
+        name: "irq",
+        description: "",
+        events: &[
+            Event {
+                system: "irq",
+                name: None,
+                required: true,
+            },
+        ],
+    },
+    Category {
         name: "drm",
         description: "",
         events: &[
             Event {
                 system: "drm",
-                name: Some("drm_vblank_event"),
+                name: None,
                 required: true,
             },
         ],
@@ -163,37 +174,32 @@ static CATEGORIES: [Category; 7] = [
         events: &[
             Event {
                 system: "i915",
-                name: Some("i915_gem_ring_dispatch"),
+                name: Some("i915_request_queue"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_gem_ring_flush"),
+                name: Some("i915_request_add"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_gem_request_add"),
+                name: Some("i915_request_retire"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_gem_request_complete"),
+                name: Some("i915_request_wait_begin"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_gem_request_retire"),
+                name: Some("i915_request_wait_end"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_gem_request_wait_begin"),
-                required: true,
-            },
-            Event {
-                system: "i915",
-                name: Some("i915_gem_request_wait_end"),
+                name: Some("intel_gpu_freq_change"),
                 required: true,
             },
             Event {
@@ -203,21 +209,44 @@ static CATEGORIES: [Category; 7] = [
             },
             Event {
                 system: "i915",
-                name: Some("i915_flip_request"),
+                name: Some("i915_gem_evict_node"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("i915_flip_complete"),
+                name: Some("i915_gem_evict_vm"),
                 required: true,
             },
             Event {
                 system: "i915",
-                name: Some("intel_gpu_freq_change"),
+                name: Some("i915_gem_shrink"),
+                required: true,
+            },
+            Event {
+                system: "i915",
+                name: Some("i915_pipe_update_start"),
+                required: true,
+            },
+            Event {
+                system: "i915",
+                name: Some("i915_pipe_update_end"),
                 required: true,
             },
         ],
     },
+    /*
+    Category {
+        name: "syscalls",
+        description: "",
+        events: &[
+            Event {
+                system: "syscalls",
+                name: None,
+                required: true,
+            },
+        ],
+    },
+    */
 ];
 
 fn write_file(path: &Path, val: &str) -> std::io::Result<()> {
