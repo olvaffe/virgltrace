@@ -18,7 +18,7 @@ struct Category {
     events: &'static [Event],
 }
 
-static CATEGORIES: [Category; 8] = [
+static CATEGORIES: [Category; 9] = [
     Category {
         name: "sched",
         description: "",
@@ -230,6 +230,27 @@ static CATEGORIES: [Category; 8] = [
             Event {
                 system: "i915",
                 name: Some("i915_pipe_update_end"),
+                required: true,
+            },
+        ],
+    },
+    Category {
+        name: "kvm",
+        description: "",
+        events: &[
+            Event {
+                system: "kvm",
+                name: Some("kvm_userspace_exit"),
+                required: true,
+            },
+            Event {
+                system: "kvm",
+                name: Some("kvm_mmio"),
+                required: true,
+            },
+            Event {
+                system: "kvm",
+                name: Some("kvm_set_irq"),
                 required: true,
             },
         ],
