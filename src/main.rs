@@ -240,6 +240,16 @@ static CATEGORIES: [Category; 9] = [
         events: &[
             Event {
                 system: "kvm",
+                name: Some("kvm_entry"),
+                required: true,
+            },
+            Event {
+                system: "kvm",
+                name: Some("kvm_exit"),
+                required: true,
+            },
+            Event {
+                system: "kvm",
                 name: Some("kvm_userspace_exit"),
                 required: true,
             },
@@ -251,6 +261,11 @@ static CATEGORIES: [Category; 9] = [
             Event {
                 system: "kvm",
                 name: Some("kvm_set_irq"),
+                required: true,
+            },
+            Event {
+                system: "kvm",
+                name: Some("kvm_msi_set_irq"),
                 required: true,
             },
         ],
