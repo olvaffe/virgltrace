@@ -18,7 +18,7 @@ struct Category {
     events: &'static [Event],
 }
 
-static CATEGORIES: [Category; 9] = [
+static CATEGORIES: [Category; 10] = [
     Category {
         name: "sched",
         description: "",
@@ -270,7 +270,6 @@ static CATEGORIES: [Category; 9] = [
             },
         ],
     },
-    /*
     Category {
         name: "syscalls",
         description: "",
@@ -282,7 +281,6 @@ static CATEGORIES: [Category; 9] = [
             },
         ],
     },
-    */
 ];
 
 fn write_file(path: &Path, val: &str) -> std::io::Result<()> {
