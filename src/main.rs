@@ -1,13 +1,13 @@
-use std::path::Path;
+use std::collections::HashSet;
+use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::io::Read;
-use std::io::BufRead;
-use std::io::BufReader;
+use std::path::Path;
 use std::{thread, time};
 
 struct Event {
-    system: &'static str,
+    subsystem: &'static str,
     name: Option<&'static str>,
     required: bool,
 }
@@ -21,42 +21,42 @@ struct Category {
 static CATEGORIES: [Category; 10] = [
     Category {
         name: "sched",
-        description: "",
+        description: "scheduler-related events",
         events: &[
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_switch"),
                 required: true,
             },
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_wakeup"),
                 required: true,
             },
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_waking"),
                 required: false,
             },
             // Android / CrOS only
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_blocked_reason"),
                 required: false,
             },
             // Android / CrOS only
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_cpu_hotplug"),
                 required: false,
             },
             Event {
-                system: "sched",
+                subsystem: "sched",
                 name: Some("sched_pi_setprio"),
                 required: false,
             },
             Event {
-                system: "cgroup",
+                subsystem: "cgroup",
                 name: None,
                 required: false,
             },
@@ -64,45 +64,45 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "freq",
-        description: "",
+        description: "CPU frequency events",
         events: &[
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("cpu_frequency"),
                 required: true,
             },
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("clock_set_rate"),
                 required: false,
             },
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("clock_disable"),
                 required: false,
             },
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("clock_enable"),
                 required: false,
             },
             Event {
-                system: "clk",
+                subsystem: "clk",
                 name: Some("clk_set_rate"),
                 required: false,
             },
             Event {
-                system: "clk",
+                subsystem: "clk",
                 name: Some("clk_disable"),
                 required: false,
             },
             Event {
-                system: "clk",
+                subsystem: "clk",
                 name: Some("clk_enable"),
                 required: false,
             },
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("cpu_frequency_limits"),
                 required: false,
             },
@@ -110,10 +110,10 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "idle",
-        description: "",
+        description: "CPU idle state events",
         events: &[
             Event {
-                system: "power",
+                subsystem: "power",
                 name: Some("cpu_idle"),
                 required: true,
             },
@@ -121,10 +121,10 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "irq",
-        description: "",
+        description: "IRQ events",
         events: &[
             Event {
-                system: "irq",
+                subsystem: "irq",
                 name: None,
                 required: true,
             },
@@ -132,10 +132,10 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "drm",
-        description: "",
+        description: "DRM vblank events",
         events: &[
             Event {
-                system: "drm",
+                subsystem: "drm",
                 name: None,
                 required: true,
             },
@@ -143,15 +143,15 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "fence",
-        description: "",
+        description: "DMA-FENCE events",
         events: &[
             Event {
-                system: "dma_fence",
+                subsystem: "dma_fence",
                 name: None,
                 required: true,
             },
             Event {
-                system: "sync_trace",
+                subsystem: "sync_trace",
                 name: Some("sync_timeline"),
                 required: true,
             },
@@ -159,10 +159,10 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "virtio-gpu",
-        description: "",
+        description: "virtio-gpu GPU events",
         events: &[
             Event {
-                system: "virtio_gpu",
+                subsystem: "virtio_gpu",
                 name: None,
                 required: true,
             },
@@ -170,65 +170,65 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "i915",
-        description: "",
+        description: "Intel GPU events",
         events: &[
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_request_queue"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_request_add"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_request_retire"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_request_wait_begin"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_request_wait_end"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("intel_gpu_freq_change"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_gem_evict"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_gem_evict_node"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_gem_evict_vm"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_gem_shrink"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_pipe_update_start"),
                 required: true,
             },
             Event {
-                system: "i915",
+                subsystem: "i915",
                 name: Some("i915_pipe_update_end"),
                 required: true,
             },
@@ -236,35 +236,35 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "kvm",
-        description: "",
+        description: "KVM events",
         events: &[
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_entry"),
                 required: true,
             },
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_exit"),
                 required: true,
             },
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_userspace_exit"),
                 required: true,
             },
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_mmio"),
                 required: true,
             },
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_set_irq"),
                 required: true,
             },
             Event {
-                system: "kvm",
+                subsystem: "kvm",
                 name: Some("kvm_msi_set_irq"),
                 required: true,
             },
@@ -272,10 +272,10 @@ static CATEGORIES: [Category; 10] = [
     },
     Category {
         name: "syscalls",
-        description: "",
+        description: "subsystem call events",
         events: &[
             Event {
-                system: "syscalls",
+                subsystem: "syscalls",
                 name: None,
                 required: true,
             },
@@ -288,7 +288,7 @@ fn write_file(path: &Path, val: &str) -> std::io::Result<()> {
 }
 
 fn truncate_file(path: &Path) -> std::io::Result<()> {
-    File::create(path);
+    File::create(path)?;
     Ok(())
 }
 
@@ -398,9 +398,25 @@ fn dump_trace(tracefs: &Path, filename: &str) -> std::io::Result<()> {
 }
 
 fn enable_category(tracefs: &Path, category: &Category, enable: bool) -> std::io::Result<()> {
+    let mut last_missing_subsystem = None;
+
     for event in category.events.iter() {
         let mut path = tracefs.join("events");
-        path.push(event.system);
+        path.push(event.subsystem);
+
+        if !path.as_path().exists() {
+            if enable && (last_missing_subsystem == None ||
+                          last_missing_subsystem.unwrap() != event.subsystem) {
+                println!("subsystem {} is missing", event.subsystem);
+                last_missing_subsystem = Some(event.subsystem);
+            }
+            if event.required {
+                return Err(
+                    std::io::Error::new(std::io::ErrorKind::NotFound, ""));
+            }
+            continue;
+        }
+
         match event.name {
             Some(name) => path.push(name),
             None => (),
@@ -409,14 +425,18 @@ fn enable_category(tracefs: &Path, category: &Category, enable: bool) -> std::io
 
         match write_file(path.as_path(), bool_to_str(enable)) {
             Ok(()) => (),
-            Err(_) => if enable {
-                let mut pretty = event.system.to_string();
+            Err(err) => if enable {
+                let mut pretty = event.subsystem.to_string();
                 if event.name != None {
                     pretty.push_str(":");
                     pretty.push_str(event.name.unwrap());
                 }
 
-                println!("{} is missing", pretty);
+                println!("event {} is missing", pretty);
+
+                if event.required {
+                    return Err(err);
+                }
             }
         }
     }
@@ -425,37 +445,71 @@ fn enable_category(tracefs: &Path, category: &Category, enable: bool) -> std::io
 }
 
 fn main() {
+    let enabled_categories : HashSet<String> = env::args().skip(1).collect();
+
+    if enabled_categories.contains("-h") {
+        println!("Usage: {} [category1] [category2]...",
+                 env::args().nth(0).unwrap());
+        println!("Available categories are:");
+
+        for category in CATEGORIES.iter() {
+            println!("  {}: {}", category.name, category.description);
+        }
+        return;
+    }
+
     let tracefs = match find_tracefs() {
         Some(path) => path,
         None => panic!("failed to locate tracefs"),
     };
 
-    set_option(tracefs, "overwrite", bool_to_str(true));
-    set_option(tracefs, "record-tgid", bool_to_str(true));
-    // Android / CrOS only
-    set_option(tracefs, "print-tgid", bool_to_str(true));
-
-    set_buffer_size_kb(tracefs, 32 * 1024);
-    set_trace_clock(tracefs);
-    set_current_tracer(tracefs, "nop");
-    set_ftrace_filter(tracefs);
-
-    for category in CATEGORIES.iter() {
-        enable_category(tracefs, &category, true);
+    set_option(tracefs, "overwrite", bool_to_str(true)).unwrap();
+    match set_option(tracefs, "record-tgid", bool_to_str(true)) {
+        Ok(_) => (),
+        Err(_) => {
+            // Android / CrOS only
+            set_option(tracefs, "print-tgid", bool_to_str(true)).unwrap();
+        },
     }
 
-    set_tracing_on(tracefs, true);
-    clear_trace(tracefs);
+    set_buffer_size_kb(tracefs, 32 * 1024).unwrap();
+    set_trace_clock(tracefs).unwrap();
+    set_current_tracer(tracefs, "nop").unwrap();
+    set_ftrace_filter(tracefs).unwrap();
+
+    for category in CATEGORIES.iter() {
+        let mut explicitly_enabled = None;
+        if enabled_categories.is_empty() {
+            explicitly_enabled = Some(false);
+        } else if enabled_categories.contains(category.name) {
+            explicitly_enabled = Some(true);
+        }
+
+        match explicitly_enabled {
+            Some(required) => {
+                match enable_category(tracefs, &category, true) {
+                    Ok(_) => (),
+                    Err(_) => if required {
+                        panic!("failed to enable {}", category.name);
+                    },
+                }
+            },
+            None => (),
+        }
+    }
+
+    set_tracing_on(tracefs, true).unwrap();
+    let _ = clear_trace(tracefs);
 
     println!("tracing for 5 secs...");
     thread::sleep(time::Duration::from_secs(5));
 
-    set_tracing_on(tracefs, false);
-    dump_trace(tracefs, "tmp.trace");
+    let _ = set_tracing_on(tracefs, false);
+    let _ = dump_trace(tracefs, "tmp.trace");
 
-    clear_trace(tracefs);
+    let _ = clear_trace(tracefs);
 
     for category in CATEGORIES.iter() {
-        enable_category(tracefs, &category, false);
+        let _ = enable_category(tracefs, &category, false);
     }
 }
