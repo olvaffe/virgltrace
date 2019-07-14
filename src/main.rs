@@ -1,10 +1,18 @@
+mod sleep;
+
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::io::Read;
 use std::path::Path;
-use std::{thread, time};
+use std::process::exit;
+
+struct Config {
+    timeout: u32,
+    enabled_categories: HashSet<&'static str>,
+    explicit: bool,
+}
 
 struct Event {
     subsystem: &'static str,
@@ -444,19 +452,79 @@ fn enable_category(tracefs: &Path, category: &Category, enable: bool) -> std::io
     Ok(())
 }
 
-fn main() {
-    let enabled_categories : HashSet<String> = env::args().skip(1).collect();
+fn usage() {
+    println!("Usage: {} [-h] [-t <timeout>] [category1] [category2]...",
+             env::args().nth(0).unwrap());
 
-    if enabled_categories.contains("-h") {
-        println!("Usage: {} [category1] [category2]...",
-                 env::args().nth(0).unwrap());
-        println!("Available categories are:");
+    println!();
+    println!("Options");
+    println!("  -h            Print this message.");
+    println!("  -t <timeout>  Trace for <timeout> seconds.");
 
-        for category in CATEGORIES.iter() {
-            println!("  {}: {}", category.name, category.description);
-        }
-        return;
+    println!();
+    println!("Available categories are:");
+    for category in CATEGORIES.iter() {
+        println!("  {}: {}", category.name, category.description);
     }
+
+    exit(1);
+}
+
+fn parse_args() -> Config {
+    let mut config = Config {
+        timeout: 5,
+        enabled_categories: HashSet::new(),
+        explicit: false,
+    };
+
+    let mut known_categories = HashSet::new();
+    for category in CATEGORIES.iter() {
+        known_categories.insert(category.name);
+    }
+
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "-h" {
+            usage();
+        } else if arg == "-t" {
+            let mut timeout = None;
+
+            match args.next() {
+                Some(next) => timeout = next.parse().ok(),
+                _ => (),
+            }
+
+            match timeout {
+                Some(timeout) => config.timeout = timeout,
+                None => {
+                    println!("failed to parse timeout");
+                    usage();
+                }
+            }
+        } else {
+            config.explicit = true;
+
+            match known_categories.get(arg.as_str()) {
+                Some(name) => {
+                    config.enabled_categories.insert(*name);
+                },
+                None => {
+                    println!("unknown category {}", arg);
+                    usage();
+                }
+            }
+        }
+    }
+
+    if !config.explicit {
+        config.enabled_categories = known_categories;
+    }
+
+    config
+}
+
+fn main() {
+    let config = parse_args();
 
     let tracefs = match find_tracefs() {
         Some(path) => path,
@@ -478,31 +546,23 @@ fn main() {
     set_ftrace_filter(tracefs).unwrap();
 
     for category in CATEGORIES.iter() {
-        let mut explicitly_enabled = None;
-        if enabled_categories.is_empty() {
-            explicitly_enabled = Some(false);
-        } else if enabled_categories.contains(category.name) {
-            explicitly_enabled = Some(true);
+        if !config.enabled_categories.contains(category.name) {
+            continue;
         }
 
-        match explicitly_enabled {
-            Some(required) => {
-                match enable_category(tracefs, &category, true) {
-                    Ok(_) => (),
-                    Err(_) => if required {
-                        panic!("failed to enable {}", category.name);
-                    },
-                }
+        match enable_category(tracefs, &category, true) {
+            Ok(_) => (),
+            Err(_) => if config.explicit {
+                panic!("failed to enable {}", category.name);
             },
-            None => (),
         }
     }
 
     set_tracing_on(tracefs, true).unwrap();
     let _ = clear_trace(tracefs);
 
-    println!("tracing for 5 secs...");
-    thread::sleep(time::Duration::from_secs(5));
+    println!("tracing for {} secs...", config.timeout);
+    sleep::sleep(config.timeout);
 
     let _ = set_tracing_on(tracefs, false);
     let _ = dump_trace(tracefs, "tmp.trace");
