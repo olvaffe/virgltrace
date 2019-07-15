@@ -1,11 +1,11 @@
+mod ftrace;
 mod sleep;
-mod tracer;
 
+use ftrace::Tracer;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use tracer::Tracer;
 
 struct Config {
     output: PathBuf,
@@ -386,7 +386,7 @@ fn set_tracefs(tracer: &mut Tracer) {
     ];
 
     for &tracefs in &tracefs_paths {
-        tracer.init(tracefs);
+        tracer.set_tracefs(tracefs);
         if !tracer.has_err() {
             return;
         }
@@ -518,7 +518,7 @@ fn check_error(tracer: &Tracer, msg: &str) {
 fn main() {
     let config = parse_args();
 
-    let mut tracer = tracer::Tracer::new();
+    let mut tracer = Tracer::new();
 
     set_tracefs(&mut tracer);
     check_error(&tracer, "failed to set tracefs");

@@ -25,7 +25,26 @@ impl Tracer {
         }
     }
 
-    fn set_err(&mut self, kind: io::ErrorKind, path: PathBuf) {
+    pub fn set_tracefs(&mut self, tracefs: &'static Path) {
+        let trace = tracefs.join("trace");
+
+        self.last_err_kind = self.path_test(&trace);
+        if self.last_err_kind.is_some() {
+            self.last_err_path = Some(trace);
+        } else {
+            self.tracefs = tracefs;
+        }
+    }
+
+    pub fn has_err(&self) -> bool {
+        self.last_err_kind.is_some()
+    }
+
+    pub fn get_err(&self) -> (&io::ErrorKind, &PathBuf) {
+        (self.last_err_kind.as_ref().unwrap(), self.last_err_path.as_ref().unwrap())
+    }
+
+    fn path_err(&mut self, kind: io::ErrorKind, path: PathBuf) {
         self.last_err_kind = Some(kind);
         self.last_err_path = Some(path);
     }
@@ -39,7 +58,7 @@ impl Tracer {
 
     fn path_truncate(&mut self, path: PathBuf) {
         if let Err(err) = fs::File::create(path.as_path()) {
-            self.set_err(err.kind(), path);
+            self.path_err(err.kind(), path);
         }
     }
 
@@ -47,10 +66,10 @@ impl Tracer {
         match fs::File::create(path.as_path()) {
             Ok(mut file) => {
                 if let Err(err) = file.write_all(val.as_bytes()) {
-                    self.set_err(err.kind(), path);
+                    self.path_err(err.kind(), path);
                 }
             }
-            Err(err) => self.set_err(err.kind(), path),
+            Err(err) => self.path_err(err.kind(), path),
         }
     }
 
@@ -59,32 +78,13 @@ impl Tracer {
         match fs::File::open(path.as_path()) {
             Ok(mut file) => {
                 if let Err(err) = file.read_to_string(&mut val) {
-                    self.set_err(err.kind(), path);
+                    self.path_err(err.kind(), path);
                 }
             }
-            Err(err) => self.set_err(err.kind(), path),
+            Err(err) => self.path_err(err.kind(), path),
         }
 
         val
-    }
-
-    pub fn has_err(&self) -> bool {
-        self.last_err_kind.is_some()
-    }
-
-    pub fn get_err(&self) -> (io::ErrorKind, PathBuf) {
-        (self.last_err_kind.clone().unwrap(), self.last_err_path.clone().unwrap())
-    }
-
-    pub fn init(&mut self, tracefs: &'static Path) {
-        let trace = tracefs.join("trace");
-
-        self.last_err_kind = self.path_test(&trace);
-        if self.last_err_kind.is_some() {
-            self.last_err_path = Some(trace);
-        } else {
-            self.tracefs = tracefs;
-        }
     }
 
     pub fn test(&self, path: &str) -> bool {
