@@ -1,16 +1,16 @@
 mod sleep;
+mod tracer;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
+use tracer::Tracer;
 
 struct Config {
+    output: PathBuf,
     timeout: u32,
-    enabled_categories: HashSet<&'static str>,
+    enabled_categories: Vec<usize>,
     explicit: bool,
 }
 
@@ -291,167 +291,6 @@ static CATEGORIES: [Category; 10] = [
     },
 ];
 
-fn write_file(path: &Path, val: &str) -> std::io::Result<()> {
-    File::create(path)?.write_all(val.as_bytes())
-}
-
-fn truncate_file(path: &Path) -> std::io::Result<()> {
-    File::create(path)?;
-    Ok(())
-}
-
-fn read_file(path: &Path) -> std::io::Result<String> {
-    let mut val = String::new();
-    File::open(path)?.read_to_string(&mut val)?;
-    Ok(val)
-}
-
-fn find_tracefs() -> Option<&'static Path> {
-    let tracefs_dirs = [
-        "/sys/kernel/tracing",
-        "/sys/kernel/debug/tracing",
-    ];
-
-    for &dir in tracefs_dirs.iter() {
-        let path = Path::new(dir).join("trace");
-        if path.exists() {
-            return Some(Path::new(dir));
-        }
-    }
-
-    None
-}
-
-fn set_buffer_size_kb(tracefs: &Path, size: u32) -> std::io::Result<()> {
-    write_file(tracefs.join("buffer_size_kb").as_path(), &size.to_string())
-}
-
-fn set_trace_clock(tracefs: &Path) -> std::io::Result<()> {
-    let preferred_clocks = [
-        "boot",
-        "mono",
-        "global",
-    ];
-
-    let path = tracefs.join("trace_clock");
-    let val = read_file(path.as_path())?;
-
-    for &clock in preferred_clocks.iter() {
-        if val.contains(clock) {
-            // writing to trace_clock can be slow
-            if val.contains(format!("[{}]", clock).as_str()) {
-                return Ok(())
-            } else {
-                return write_file(path.as_path(), clock)
-            }
-        }
-    }
-
-    panic!()
-}
-
-fn set_current_tracer(tracefs: &Path, tracer: &str) -> std::io::Result<()> {
-    write_file(tracefs.join("current_tracer").as_path(), tracer)
-}
-
-fn set_ftrace_filter(tracefs: &Path) -> std::io::Result<()> {
-    truncate_file(tracefs.join("set_ftrace_filter").as_path())
-}
-
-fn set_option(tracefs: &Path, option: &str, val: &str) -> std::io::Result<()> {
-    let mut path = tracefs.join("options");
-    path.push(option);
-    write_file(path.as_path(), val)
-}
-
-fn bool_to_str(val: bool) -> &'static str {
-    if val { "1" } else { "0" }
-}
-
-fn set_tracing_on(tracefs: &Path, enable: bool) -> std::io::Result<()> {
-    write_file(tracefs.join("tracing_on").as_path(), bool_to_str(enable))
-}
-
-fn clear_trace(tracefs: &Path) -> std::io::Result<()> {
-    truncate_file(tracefs.join("trace").as_path())
-}
-
-fn dump_trace(tracefs: &Path, filename: &str) -> std::io::Result<()> {
-    println!("saving the trace to {}...", filename);
-
-    // copy does not work on CrOS
-    //std::fs::copy(tracefs.join("trace").as_path(), Path::new(filename))?;
-    let buf = std::fs::read(tracefs.join("trace").as_path())?;
-    std::fs::write(Path::new(filename), buf)?;
-    Ok(())
-
-    /*
-    let src = File::open(tracefs.join("trace").as_path())?;
-    let mut dst = File::create(Path::new(filename))?;
-
-    for line in BufReader::new(src).lines() {
-        match line {
-            Ok(line) => {
-                // Chrome Trace does not support dma_fence
-                let mut line = line.replacen(": dma_fence_", ": fence_", 1);
-                line.push_str("\n");
-                dst.write_all(line.as_bytes())?;
-            },
-            Err(_) => { break }
-        }
-    }
-
-    Ok(())
-    */
-}
-
-fn enable_category(tracefs: &Path, category: &Category, enable: bool) -> std::io::Result<()> {
-    let mut last_missing_subsystem = None;
-
-    for event in category.events.iter() {
-        let mut path = tracefs.join("events");
-        path.push(event.subsystem);
-
-        if !path.as_path().exists() {
-            if enable && (last_missing_subsystem == None ||
-                          last_missing_subsystem.unwrap() != event.subsystem) {
-                println!("subsystem {} is missing", event.subsystem);
-                last_missing_subsystem = Some(event.subsystem);
-            }
-            if event.required {
-                return Err(
-                    std::io::Error::new(std::io::ErrorKind::NotFound, ""));
-            }
-            continue;
-        }
-
-        match event.name {
-            Some(name) => path.push(name),
-            None => (),
-        }
-        path.push("enable");
-
-        match write_file(path.as_path(), bool_to_str(enable)) {
-            Ok(()) => (),
-            Err(err) => if enable {
-                let mut pretty = event.subsystem.to_string();
-                if event.name != None {
-                    pretty.push_str(":");
-                    pretty.push_str(event.name.unwrap());
-                }
-
-                println!("event {} is missing", pretty);
-
-                if event.required {
-                    return Err(err);
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 fn usage() {
     println!("Usage: {} [-h] [-t <timeout>] [category1] [category2]...",
              env::args().nth(0).unwrap());
@@ -463,7 +302,7 @@ fn usage() {
 
     println!();
     println!("Available categories are:");
-    for category in CATEGORIES.iter() {
+    for category in &CATEGORIES {
         println!("  {}: {}", category.name, category.description);
     }
 
@@ -472,26 +311,41 @@ fn usage() {
 
 fn parse_args() -> Config {
     let mut config = Config {
+        output: PathBuf::from("tmp.trace"),
         timeout: 5,
-        enabled_categories: HashSet::new(),
+        enabled_categories: Vec::new(),
         explicit: false,
     };
 
-    let mut known_categories = HashSet::new();
-    for category in CATEGORIES.iter() {
-        known_categories.insert(category.name);
+    let mut known_categories = HashMap::new();
+    for (i, category) in CATEGORIES.iter().enumerate() {
+        known_categories.insert(category.name, i as usize);
     }
 
     let mut args = env::args().skip(1);
+    let mut enabled_categories = HashSet::new();
     while let Some(arg) = args.next() {
         if arg == "-h" {
             usage();
+        } else if arg == "-o" {
+            let mut output = None;
+
+            if let Some(next) = args.next() {
+                output = Some(PathBuf::from(next));
+            }
+
+            match output {
+                Some(output) => config.output = output,
+                None => {
+                    println!("filename is missing");
+                    usage();
+                }
+            }
         } else if arg == "-t" {
             let mut timeout = None;
 
-            match args.next() {
-                Some(next) => timeout = next.parse().ok(),
-                _ => (),
+            if let Some(next) = args.next() {
+                timeout = next.parse().ok();
             }
 
             match timeout {
@@ -502,11 +356,9 @@ fn parse_args() -> Config {
                 }
             }
         } else {
-            config.explicit = true;
-
             match known_categories.get(arg.as_str()) {
-                Some(name) => {
-                    config.enabled_categories.insert(*name);
+                Some(index) => {
+                    enabled_categories.insert(index);
                 },
                 None => {
                     println!("unknown category {}", arg);
@@ -516,60 +368,175 @@ fn parse_args() -> Config {
         }
     }
 
-    if !config.explicit {
-        config.enabled_categories = known_categories;
+    if enabled_categories.is_empty() {
+        let all = 0usize..CATEGORIES.len();
+        config.enabled_categories.extend(all);
+    } else {
+        config.enabled_categories.extend(enabled_categories.into_iter());
+        config.explicit = true;
     }
 
     config
 }
 
+fn set_tracefs(tracer: &mut Tracer) {
+    let tracefs_paths = [
+        Path::new("/sys/kernel/tracing"),
+        Path::new("/sys/kernel/debug/tracing"),
+    ];
+
+    for &tracefs in &tracefs_paths {
+        tracer.init(tracefs);
+        if !tracer.has_err() {
+            return;
+        }
+    }
+}
+
+fn set_trace_clock(tracer: &mut Tracer) {
+    let preferred_clocks = [
+        "boot",
+        "mono",
+        "global",
+    ];
+
+    let val = tracer.read("trace_clock");
+
+    for &clock in &preferred_clocks {
+        if val.contains(clock) {
+            // writing to trace_clock can be slow; do not re-enable
+            let active_clock = format!("[{}]", clock);
+            if !val.contains(&active_clock) {
+                tracer.write("trace_clock", clock);
+            }
+            break;
+        }
+    }
+}
+
+fn set_options(tracer: &mut Tracer) {
+    // clear trace
+    tracer.write_bool("tracing_on", false);
+    tracer.truncate("trace");
+
+    if tracer.test("options/record-tgid") {
+        tracer.write_bool("options/record-tgid", true);
+    } else {
+        // Android / CrOS only
+        tracer.write_bool("options/print-tgid", true);
+    }
+
+    tracer.write_i32("buffer_size_kb", 32 * 1024);
+    tracer.write("current_tracer", "nop");
+    tracer.truncate("set_ftrace_filter");
+
+    set_trace_clock(tracer);
+}
+
+fn collect_events(tracer: &Tracer, categories: &Vec<usize>, explicit: bool) -> Vec<String> {
+    let mut paths = Vec::new();
+    for &index in categories.iter() {
+        let cat = &CATEGORIES[index];
+
+        let mut cat_paths = Vec::new();
+        for ev in cat.events {
+            let mut comps = Vec::new();
+            comps.push("events");
+            comps.push(ev.subsystem);
+            if let Some(name) = ev.name {
+                comps.push(name);
+            }
+            comps.push("enable");
+
+            let path = comps.join("/");
+            if explicit {
+                if ev.required || tracer.test(&path) {
+                    cat_paths.push(path);
+                }
+            } else {
+                if tracer.test(&path) {
+                    cat_paths.push(path);
+                } else if ev.required {
+                    cat_paths.clear();
+                    break;
+                }
+            }
+        }
+
+        if cat_paths.is_empty() && !explicit {
+            println!("skipping category {}", cat.name);
+        }
+
+        paths.append(&mut cat_paths);
+    }
+
+    paths
+}
+
+fn set_events(tracer: &mut Tracer, paths: &Vec<String>, enable: bool) {
+    for path in paths {
+        tracer.write_bool(&path, enable);
+        if tracer.has_err() {
+            break;
+        }
+    }
+}
+
+fn trace(tracer: &mut Tracer, timeout: u32) {
+
+    tracer.write_bool("tracing_on", true);
+    if tracer.has_err() {
+        let (kind, path) = tracer.get_err();
+        println!("failed to enable tracing {}: {:?}",
+                 path.to_string_lossy(), kind);
+        exit(1);
+    }
+
+    sleep::sleep(timeout);
+
+    tracer.write_bool("tracing_on", false);
+}
+
+fn save_trace(tracer: &mut Tracer, output: &Path) {
+    // std::fs::copy does not work on CrOS
+    let buf = tracer.read("trace");
+    let _ = std::fs::write(output, buf);
+
+    tracer.truncate("trace");
+}
+
+fn check_error(tracer: &Tracer, msg: &str) {
+    if !tracer.has_err() {
+        return;
+    }
+
+    let (kind, path) = tracer.get_err();
+    println!("{}: {} {:?}", msg, path.to_string_lossy(), kind);
+    exit(1);
+}
+
 fn main() {
     let config = parse_args();
 
-    let tracefs = match find_tracefs() {
-        Some(path) => path,
-        None => panic!("failed to locate tracefs"),
-    };
+    let mut tracer = tracer::Tracer::new();
 
-    set_option(tracefs, "overwrite", bool_to_str(true)).unwrap();
-    match set_option(tracefs, "record-tgid", bool_to_str(true)) {
-        Ok(_) => (),
-        Err(_) => {
-            // Android / CrOS only
-            set_option(tracefs, "print-tgid", bool_to_str(true)).unwrap();
-        },
-    }
+    set_tracefs(&mut tracer);
+    check_error(&tracer, "failed to set tracefs");
 
-    set_buffer_size_kb(tracefs, 32 * 1024).unwrap();
-    set_trace_clock(tracefs).unwrap();
-    set_current_tracer(tracefs, "nop").unwrap();
-    set_ftrace_filter(tracefs).unwrap();
+    println!("setting options...");
+    set_options(&mut tracer);
+    check_error(&tracer, "failed to set options");
 
-    for category in CATEGORIES.iter() {
-        if !config.enabled_categories.contains(category.name) {
-            continue;
-        }
+    println!("setting events...");
+    let event_paths = collect_events(&tracer, &config.enabled_categories, config.explicit);
+    set_events(&mut tracer, &event_paths, true);
+    check_error(&tracer, "failed to set events");
 
-        match enable_category(tracefs, &category, true) {
-            Ok(_) => (),
-            Err(_) => if config.explicit {
-                panic!("failed to enable {}", category.name);
-            },
-        }
-    }
+    println!("tracing for {} seconds...", config.timeout);
+    trace(&mut tracer, config.timeout);
 
-    set_tracing_on(tracefs, true).unwrap();
-    let _ = clear_trace(tracefs);
+    println!("saving the trace to {}...", config.output.to_string_lossy());
+    save_trace(&mut tracer, &config.output);
 
-    println!("tracing for {} secs...", config.timeout);
-    sleep::sleep(config.timeout);
-
-    let _ = set_tracing_on(tracefs, false);
-    let _ = dump_trace(tracefs, "tmp.trace");
-
-    let _ = clear_trace(tracefs);
-
-    for category in CATEGORIES.iter() {
-        let _ = enable_category(tracefs, &category, false);
-    }
+    set_events(&mut tracer, &event_paths, false);
 }
