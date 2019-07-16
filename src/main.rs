@@ -31,262 +31,85 @@ static CATEGORIES: [Category; 10] = [
         name: "sched",
         description: "scheduler-related events",
         events: &[
-            Event {
-                subsystem: "sched",
-                name: Some("sched_switch"),
-                required: true,
-            },
-            Event {
-                subsystem: "sched",
-                name: Some("sched_wakeup"),
-                required: true,
-            },
-            Event {
-                subsystem: "sched",
-                name: Some("sched_waking"),
-                required: false,
-            },
-            // Android / CrOS only
-            Event {
-                subsystem: "sched",
-                name: Some("sched_blocked_reason"),
-                required: false,
-            },
-            // Android / CrOS only
-            Event {
-                subsystem: "sched",
-                name: Some("sched_cpu_hotplug"),
-                required: false,
-            },
-            Event {
-                subsystem: "sched",
-                name: Some("sched_pi_setprio"),
-                required: false,
-            },
-            Event {
-                subsystem: "cgroup",
-                name: None,
-                required: false,
-            },
+            Event { subsystem: "sched",     name: Some("sched_switch"),             required: true,  },
+            Event { subsystem: "sched",     name: Some("sched_wakeup"),             required: true,  },
         ],
     },
     Category {
-        name: "freq",
-        description: "CPU frequency events",
+        name: "syscalls",
+        description: "system call events",
         events: &[
-            Event {
-                subsystem: "power",
-                name: Some("cpu_frequency"),
-                required: true,
-            },
-            Event {
-                subsystem: "power",
-                name: Some("clock_set_rate"),
-                required: false,
-            },
-            Event {
-                subsystem: "power",
-                name: Some("clock_disable"),
-                required: false,
-            },
-            Event {
-                subsystem: "power",
-                name: Some("clock_enable"),
-                required: false,
-            },
-            Event {
-                subsystem: "clk",
-                name: Some("clk_set_rate"),
-                required: false,
-            },
-            Event {
-                subsystem: "clk",
-                name: Some("clk_disable"),
-                required: false,
-            },
-            Event {
-                subsystem: "clk",
-                name: Some("clk_enable"),
-                required: false,
-            },
-            Event {
-                subsystem: "power",
-                name: Some("cpu_frequency_limits"),
-                required: false,
-            },
-        ],
-    },
-    Category {
-        name: "idle",
-        description: "CPU idle state events",
-        events: &[
-            Event {
-                subsystem: "power",
-                name: Some("cpu_idle"),
-                required: true,
-            },
-        ],
-    },
-    Category {
-        name: "irq",
-        description: "IRQ events",
-        events: &[
-            Event {
-                subsystem: "irq",
-                name: None,
-                required: true,
-            },
-        ],
-    },
-    Category {
-        name: "drm",
-        description: "DRM vblank events",
-        events: &[
-            Event {
-                subsystem: "drm",
-                name: None,
-                required: true,
-            },
-        ],
-    },
-    Category {
-        name: "fence",
-        description: "DMA-FENCE events",
-        events: &[
-            Event {
-                subsystem: "dma_fence",
-                name: None,
-                required: true,
-            },
-            Event {
-                subsystem: "sync_trace",
-                name: Some("sync_timeline"),
-                required: true,
-            },
-        ],
-    },
-    Category {
-        name: "virtio-gpu",
-        description: "virtio-gpu GPU events",
-        events: &[
-            Event {
-                subsystem: "virtio_gpu",
-                name: None,
-                required: true,
-            },
-        ],
-    },
-    Category {
-        name: "i915",
-        description: "Intel GPU events",
-        events: &[
-            Event {
-                subsystem: "i915",
-                name: Some("i915_request_queue"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_request_add"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_request_retire"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_request_wait_begin"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_request_wait_end"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("intel_gpu_freq_change"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_gem_evict"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_gem_evict_node"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_gem_evict_vm"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_gem_shrink"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_pipe_update_start"),
-                required: true,
-            },
-            Event {
-                subsystem: "i915",
-                name: Some("i915_pipe_update_end"),
-                required: true,
-            },
+            Event { subsystem: "syscalls",  name: None,                             required: true,  },
         ],
     },
     Category {
         name: "kvm",
         description: "KVM events",
         events: &[
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_entry"),
-                required: true,
-            },
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_exit"),
-                required: true,
-            },
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_userspace_exit"),
-                required: true,
-            },
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_mmio"),
-                required: true,
-            },
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_set_irq"),
-                required: true,
-            },
-            Event {
-                subsystem: "kvm",
-                name: Some("kvm_msi_set_irq"),
-                required: true,
-            },
+            Event { subsystem: "kvm",       name: Some("kvm_entry"),                required: true,  },
+            Event { subsystem: "kvm",       name: Some("kvm_exit"),                 required: true,  },
+            Event { subsystem: "kvm",       name: Some("kvm_mmio"),                 required: true,  },
+            Event { subsystem: "kvm",       name: Some("kvm_msi_set_irq"),          required: true,  },
+            Event { subsystem: "kvm",       name: Some("kvm_set_irq"),              required: true,  },
+            Event { subsystem: "kvm",       name: Some("kvm_userspace_exit"),       required: true,  },
         ],
     },
     Category {
-        name: "syscalls",
-        description: "subsystem call events",
+        name: "freq",
+        description: "CPU frequency events",
         events: &[
-            Event {
-                subsystem: "syscalls",
-                name: None,
-                required: true,
-            },
+            Event { subsystem: "power",     name: Some("cpu_frequency"),            required: true,  },
+            Event { subsystem: "power",     name: Some("cpu_frequency_limits"),     required: false, },
+            Event { subsystem: "power",     name: Some("cpu_idle"),                 required: true,  },
+            Event { subsystem: "clk",       name: Some("clk_disable"),              required: false, },
+            Event { subsystem: "clk",       name: Some("clk_enable"),               required: false, },
+            Event { subsystem: "clk",       name: Some("clk_set_rate"),             required: false, },
+        ],
+    },
+    Category {
+        name: "irq",
+        description: "IRQ events",
+        events: &[
+            Event { subsystem: "irq",       name: None,                             required: true,  },
+        ],
+    },
+    Category {
+        name: "drm",
+        description: "DRM vblank events",
+        events: &[
+            Event { subsystem: "drm",       name: None,                             required: true,  },
+        ],
+    },
+    Category {
+        name: "fence",
+        description: "DMA-FENCE events",
+        events: &[
+            Event { subsystem: "dma_fence", name: None,                             required: true,  },
+        ],
+    },
+    Category {
+        name: "i915",
+        description: "Intel GPU events",
+        events: &[
+            Event { subsystem: "i915",      name: Some("i915_gem_evict"),           required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_gem_evict_node"),      required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_gem_evict_vm"),        required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_gem_shrink"),          required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_pipe_update_start"),   required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_pipe_update_end"),     required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_request_add"),         required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_request_queue"),       required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_request_retire"),      required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_request_wait_begin"),  required: true,  },
+            Event { subsystem: "i915",      name: Some("i915_request_wait_end"),    required: true,  },
+            Event { subsystem: "i915",      name: Some("intel_gpu_freq_change"),    required: true,  },
+        ],
+    },
+    Category {
+        name: "virtio-gpu",
+        description: "virtio-gpu GPU events",
+        events: &[
+            Event { subsystem: "virtio_gpu", name: None,                            required: true,  },
         ],
     },
 ];
