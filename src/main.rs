@@ -292,18 +292,19 @@ static CATEGORIES: [Category; 10] = [
 ];
 
 fn usage() {
-    println!("Usage: {} [-h] [-t <timeout>] [category1] [category2]...",
+    println!("Usage: {} [options] [category1] [category2]...",
              env::args().nth(0).unwrap());
 
     println!();
     println!("Options");
     println!("  -h            Print this message.");
+    println!("  -o <filename> Save the trace to <filename>.");
     println!("  -t <timeout>  Trace for <timeout> seconds.");
 
     println!();
     println!("Available categories are:");
-    for category in &CATEGORIES {
-        println!("  {}: {}", category.name, category.description);
+    for cat in &CATEGORIES {
+        println!("  {}: {}", cat.name, cat.description);
     }
 
     exit(1);
@@ -318,8 +319,8 @@ fn parse_args() -> Config {
     };
 
     let mut known_categories = HashMap::new();
-    for (i, category) in CATEGORIES.iter().enumerate() {
-        known_categories.insert(category.name, i as usize);
+    for (i, cat) in CATEGORIES.iter().enumerate() {
+        known_categories.insert(cat.name, i);
     }
 
     let mut args = env::args().skip(1);
@@ -328,14 +329,8 @@ fn parse_args() -> Config {
         if arg == "-h" {
             usage();
         } else if arg == "-o" {
-            let mut output = None;
-
-            if let Some(next) = args.next() {
-                output = Some(PathBuf::from(next));
-            }
-
-            match output {
-                Some(output) => config.output = output,
+            match args.next() {
+                Some(next) => config.output = PathBuf::from(next),
                 None => {
                     println!("filename is missing");
                     usage();
@@ -343,7 +338,6 @@ fn parse_args() -> Config {
             }
         } else if arg == "-t" {
             let mut timeout = None;
-
             if let Some(next) = args.next() {
                 timeout = next.parse().ok();
             }
@@ -369,8 +363,8 @@ fn parse_args() -> Config {
     }
 
     if enabled_categories.is_empty() {
-        let all = 0usize..CATEGORIES.len();
-        config.enabled_categories.extend(all);
+        let all_categories = 0..CATEGORIES.len();
+        config.enabled_categories.extend(all_categories);
     } else {
         config.enabled_categories.extend(enabled_categories.into_iter());
         config.explicit = true;
@@ -435,7 +429,7 @@ fn set_options(tracer: &mut Tracer) {
 
 fn collect_events(tracer: &Tracer, categories: &Vec<usize>, explicit: bool) -> Vec<String> {
     let mut paths = Vec::new();
-    for &index in categories.iter() {
+    for &index in categories {
         let cat = &CATEGORIES[index];
 
         let mut cat_paths = Vec::new();
@@ -447,8 +441,8 @@ fn collect_events(tracer: &Tracer, categories: &Vec<usize>, explicit: bool) -> V
                 comps.push(name);
             }
             comps.push("enable");
-
             let path = comps.join("/");
+
             if explicit {
                 if ev.required || tracer.test(&path) {
                     cat_paths.push(path);
@@ -483,21 +477,14 @@ fn set_events(tracer: &mut Tracer, paths: &Vec<String>, enable: bool) {
 }
 
 fn trace(tracer: &mut Tracer, timeout: u32) {
-
     tracer.write_bool("tracing_on", true);
-    if tracer.has_err() {
-        let (kind, path) = tracer.get_err();
-        println!("failed to enable tracing {}: {:?}",
-                 path.to_string_lossy(), kind);
-        exit(1);
+    if !tracer.has_err() {
+        sleep::sleep(timeout);
     }
-
-    sleep::sleep(timeout);
-
     tracer.write_bool("tracing_on", false);
 }
 
-fn save_trace(tracer: &mut Tracer, output: &Path) {
+fn dump_trace(tracer: &mut Tracer, output: &Path) {
     // std::fs::copy does not work on CrOS
     let buf = tracer.read("trace");
     let _ = std::fs::write(output, buf);
@@ -534,9 +521,12 @@ fn main() {
 
     println!("tracing for {} seconds...", config.timeout);
     trace(&mut tracer, config.timeout);
+    check_error(&tracer, "failed to enable tracing");
 
     println!("saving the trace to {}...", config.output.to_string_lossy());
-    save_trace(&mut tracer, &config.output);
+    dump_trace(&mut tracer, &config.output);
+    check_error(&tracer, "failed to save the trace");
 
+    // clean up
     set_events(&mut tracer, &event_paths, false);
 }
