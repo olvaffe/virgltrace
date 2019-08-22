@@ -33,6 +33,7 @@ static CATEGORIES: [Category; 9] = [
         events: &[
             Event { subsystem: "sched",     name: Some("sched_switch"),             required: true,  },
             Event { subsystem: "sched",     name: Some("sched_wakeup"),             required: true,  },
+            Event { subsystem: "sched",     name: Some("sched_waking"),             required: true,  },
         ],
     },
     Category {
