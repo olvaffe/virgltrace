@@ -26,7 +26,7 @@ struct Category {
     events: &'static [Event],
 }
 
-static CATEGORIES: [Category; 10] = [
+static CATEGORIES: [Category; 9] = [
     Category {
         name: "sched",
         description: "scheduler-related events",
